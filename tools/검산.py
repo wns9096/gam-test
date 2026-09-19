@@ -52,8 +52,10 @@ def main() -> int:
     if not (RAW / "quakes.geojson").exists():
         print("data/raw 가 없다. python tools/fetch_all.py 를 먼저 돌린다.")
         return 1
-    답 = {q["id"]: q for q in json.loads(
-        (ROOT / "topics" / "quakes.json").read_text(encoding="utf-8"))["questions"]}
+    주제 = json.loads(
+        (ROOT / "topics" / "quakes.json").read_text(encoding="utf-8"))
+    답 = {q["id"]: q for q in 주제["questions"]}
+
 
     전부, 상자 = 편다("quakes.geojson"), 편다("quakes_korea.geojson")
     지진 = [x for x in 전부 if x["type"] == "earthquake"]
@@ -68,26 +70,42 @@ def main() -> int:
     ok(sorted(년) == list(range(2000, 2025)),
        "연도가 25개 빠짐없이 있다", f"{min(년)}~{max(년)} · {len(년)}개")
 
-    print("\n── z1 전 세계 연평균 ──")
-    내값 = sum(년.values()) / len(년)
+    print()
+    print("── z1 몇 시간에 한 번 ──")
+    # build 는 날수를 한 번 빼서 구한다(2025-01-01 − 2000-01-01).
+    # 여기서는 **해마다 며칠인지 세어 더한다.** 윤년을 제대로 세는지가
+    # 여기서 갈린다 — 25×365 로 어림하면 7일이 모자라 답이 달라진다.
+    일수 = sum((dt.date(y + 1, 1, 1) - dt.date(y, 1, 1)).days for y in sorted(년))
+    ok(일수 == 25 * 365 + 7, "해마다 날수를 세어 더하면 윤년 7일이 들어 있다",
+       f"{일수:,}일")
+    내값 = 일수 * 24 / sum(년.values())
     ok(round(내값, 1) == 답["z1"]["answer"],
-       "연도별로 세어 합친 값이 문항의 답과 같다",
-       f"내 {내값:.1f} · 문항 {답['z1']['answer']}")
+       "다른 길로 구한 간격이 문항의 답과 같다",
+       f"내 {내값:.2f}시간 · 문항 {답['z1']['answer']}시간")
     # ★ 여기가 재미있는 자리다. 지진 아닌 2건을 안 걸러도 소수 첫째 자리에서는
-    #   같은 수가 나온다(493.44 vs 493.36). 답은 안 움직이지만 근거 문장은
-    #   달라진다 — 그래서 거르는 것은 «수를 맞추려고»가 아니라 «말을 맞추려고»다.
-    안거른값 = len(전부) / len(년)
+    #   같은 수가 나온다. 답은 안 움직이지만 근거 문장은 달라진다 —
+    #   그래서 거르는 것은 «수를 맞추려고»가 아니라 «말을 맞추려고»다.
+    안거른값 = 일수 * 24 / len(전부)
     print(f"     · 참고: 안 거르면 {안거른값:.2f} → 반올림하면 "
-          f"{round(안거른값,1)} 로 **같다**. 답은 안 움직이고 근거 문장만 달라진다")
+          f"{round(안거른값, 1)} 로 **같다**. 답은 안 움직이고 근거만 달라진다")
 
-    print("\n── z2 규모 7 이상 ──")
-    큰 = [x for x in 지진 if x["mag"] >= 7.0]
-    작 = [x for x in 지진 if x["mag"] < 7.0]
-    ok(len(큰) + len(작) == len(지진), "7 이상 + 7 미만 = 전체",
-       f"{len(큰)} + {len(작):,} = {len(지진):,}")
-    ok(round(len(큰) / len(년), 1) == 답["z2"]["answer"],
-       "반대로 세어도 문항의 답과 같다",
-       f"내 {len(큰)/len(년):.1f} · 문항 {답['z2']['answer']}")
+    print()
+    print("── z2 70km 보다 깊은 것 ──")
+    # build 는 깊은 쪽을 센다. 여기서는 **얕은 쪽을 세고** 합이 전체인지 본다.
+    얕 = [x for x in 지진 if x["depth"] < 70]
+    깊 = [x for x in 지진 if x["depth"] >= 70]
+    ok(len(얕) + len(깊) == len(지진), "얕은 것 + 깊은 것 = 전체",
+       f"{len(얕):,} + {len(깊):,} = {len(지진):,}")
+    내값 = 100 - len(얕) / len(지진) * 100
+    ok(round(내값, 1) == 답["z2"]["answer"],
+       "얕은 쪽에서 빼도 문항의 답과 같다",
+       f"내 {내값:.1f}% · 문항 {답['z2']['answer']}%")
+    # 한계에 «28.3%가 정확히 10.0km» 라고 적었다. 그 수가 지금 파일과
+    # 맞는지 본다. 적어 놓은 수는 데이터가 바뀌면 혼자 옛말이 된다.
+    고정10 = sum(1 for x in 지진 if x["depth"] == 10.0) / len(지진) * 100
+    ok(f"{고정10:.1f}%" in 주제.get("caveat", ""),
+       "한계에 적은 «정확히 10.0km» 비율이 지금 값과 같다",
+       f"{고정10:.1f}%")
 
     print("\n── z3 규모 한 칸의 배수 ──")
     lo = sum(1 for x in 지진 if 5.5 <= x["mag"] < 6.5)
