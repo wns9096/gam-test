@@ -158,17 +158,27 @@ function renderQ() {
   } else {
     const s = $("slider");
     s.min = q.min; s.max = q.max; s.step = q.step;
-    // 기본값을 한가운데에서 한 칸 비켜 둔다 — 가운데면 생각 없이 맞는다
-    s.value = Math.round(((q.min + q.max) / 2 + q.step) / q.step) * q.step;
+    // ★ 여기에 구멍이 있었다. 기본값을 한가운데에서 «한 칸» 비켜 두고
+    //   바로 다음으로 넘어갈 수 있게 해 뒀는데, 한 칸은 아무것도 아니다.
+    //   슬라이더에 손도 안 대고 제출하면 이런 점수가 나왔다 —
+    //     환율 x5 100점 · 노동시간 w1 96점 · 인구 p4 93점 · 비 r5 93점
+    //     환율 주제는 다섯 문항 평균 65점 (객관식을 전부 0점으로 쳐도)
+    //   추측 게임에서 «안 움직인 것»은 추측이 아니다. 그래서 답으로 치지
+    //   않는다. 한 번이라도 움직여야 다음으로 넘어간다.
+    //   범위를 열 군데 손보는 것보다 이쪽이 한 자리에서 끝난다.
+    //   (문항은 앞으로만 간다 — answers 는 시작 때 비워지고 되돌아오는
+    //    길이 없다. 그래서 «이미 답한 문항» 갈래는 만들지 않는다.)
+    answers[idx] = null;
+    s.value = Math.round(((q.min + q.max) / 2) / q.step) * q.step;
     $("slider-min").textContent = `${q.min}${q.unit}`;
     $("slider-max").textContent = `${q.max}${q.unit}`;
-    const paint = () => {
+    $("slider-out").textContent = `${s.value}${q.unit}`;
+    s.oninput = () => {
       answers[idx] = Number(s.value);
       $("slider-out").textContent = `${s.value}${q.unit}`;
+      $("btn-next").disabled = false;
     };
-    s.oninput = paint;
-    paint();
-    $("btn-next").disabled = false;
+    $("btn-next").disabled = true;
   }
 }
 

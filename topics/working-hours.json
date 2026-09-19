@@ -5,7 +5,7 @@
   "blurb": "나라별 1인당 연간 노동시간",
   "source": "Our World in Data",
   "source_url": "https://ourworldindata.org/grapher/annual-working-hours-per-worker",
-  "caveat": "이 자료에는 개발도상국이 많이 포함돼 있어, OECD 안에서의 순위와 전체 순위가 다릅니다. '어느 집단과 비교하느냐'가 순위를 만듭니다.",
+  "caveat": "이 자료에는 개발도상국이 많이 포함돼 있어, OECD 안에서의 순위와 전체 순위가 다릅니다. 「어느 집단과 비교하느냐」가 순위를 만듭니다.<br>분모도 고정된 수가 아닙니다 — <b>그해에 값을 낸 나라만</b> 셉니다. 해마다 참여국이 달라지므로 순위는 그만큼 흔들립니다.<br>노동시간을 재는 방법(사업체 조사냐 가구 조사냐, 자영업을 넣느냐)도 나라마다 다릅니다.",
   "questions": [
     {
       "id": "w1",

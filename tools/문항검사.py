@@ -135,8 +135,11 @@ def main() -> int:
                     막음.append(f"{자} 눈금 {st} 로는 칸이 너무 적다")
                 if not str(q.get("unit", "")).strip():
                     막음.append(f"{자} 단위 없음")
+                # 슬라이더는 한가운데에서 시작한다(app.js). 안 만지면 답으로
+                # 안 치게 막았으니 «가만히 있어도 맞는» 일은 이제 없다.
+                # 그래도 한가운데면 조금만 밀어도 맞는다 — 그래서 경고다.
                 if abs(a - (lo + hi) / 2) < (hi - lo) * 0.08:
-                    경고.append(f"{자} 답이 한가운데({(lo + hi) / 2:g})")
+                    경고.append(f"{자} 답이 시작 위치 근처({(lo + hi) / 2:g})")
                 elif min(a - lo, hi - a) < (hi - lo) * 0.03:
                     경고.append(f"{자} 답이 끝에 붙음")
 
