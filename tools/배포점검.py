@@ -109,6 +109,19 @@ def main() -> int:
     ok(not 다름, "열 주제 파일이 내 폴더와 한 글자도 안 다르다",
        f"{다름}" if 다름 else "10/10")
 
+    # ★ 브라우저 시험(tools/브라우저시험.py)은 **내 폴더**를 띄워 본다.
+    #   그 결론이 배포본에도 해당하려면 브라우저가 받는 파일이 같아야
+    #   한다. 같지 않으면 그 시험은 배포본에 대해 아무것도 말해 주지
+    #   않는다. 그래서 여기서 못 박는다.
+    화면파일 = []
+    for f in ("app.js", "style.css"):
+        내것 = (ROOT / f).read_text(encoding="utf-8")
+        if 연다(f)[1].replace(chr(13), "") != 내것.replace(chr(13), ""):
+            화면파일.append(f)
+    ok(not 화면파일, "브라우저가 받는 app.js · style.css 가 내 폴더와 같다",
+       f"{화면파일} — 브라우저 시험 결과를 배포본에 못 옮긴다" if 화면파일
+       else "둘 다 같음")
+
     print("\n── 키가 화면에서 보이나 ──")
     샘 = [p for p in ("/", "app.js", "style.css")
           if re.search(r"AIza[0-9A-Za-z_\-]{20,}|AQ\.[0-9A-Za-z_\-]{20,}",
