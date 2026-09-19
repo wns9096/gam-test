@@ -233,6 +233,30 @@ details[open] summary::after { content: " ▴"; }
   position: absolute; top: 12px; right: 12px; font-size: 11px;
   font-weight: 700; color: var(--ok);
 }
+/* 내가 만든 주제 배지. 카드 안 아래쪽에 붙여 점수(오른쪽 위)와 안 겹치게
+   한다. 색은 기존 토큰(--brand)에서만 가져온다. */
+.tmine {
+  margin-top: auto; align-self: flex-start;
+  font-size: 10.5px; font-weight: 700; letter-spacing: -.2px;
+  color: var(--brand); border: 1px solid var(--brand);
+  border-radius: 99px; padding: 3px 8px;
+}
+
+/* 결과 화면의 「만든 과정」. 한계(점선·경고색)와 구별되게 실선·브랜드색. */
+.made {
+  border: 1px solid var(--brand); border-radius: 14px;
+  padding: 14px 16px; font-size: 12.5px; color: var(--muted);
+  line-height: 1.65; margin: 4px 0 10px;
+}
+.made .made-head { color: var(--ink); font-size: 13px; margin: 0; }
+.made .made-head b { color: var(--brand); }
+.made .made-sub {
+  margin: 12px 0 6px; font-weight: 700; color: var(--ink); font-size: 12px;
+}
+.made ul { margin: 0; padding-left: 18px; }
+.made li { margin: 0 0 7px; }
+.made li:last-child { margin-bottom: 0; }
+.made b { color: var(--ink); }
 
 .linkish {
   width: auto; background: none; color: var(--muted); border: 0;

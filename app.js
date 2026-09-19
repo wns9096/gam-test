@@ -110,6 +110,8 @@ function renderGrid() {
       `<span class="temoji">${t.emoji}</span>` +
       `<span class="ttitle">${t.title}</span>` +
       `<span class="tblurb">${t.blurb}</span>` +
+      // 골격이 준 주제에는 by 가 비어 있다. 내가 만든 주제만 배지가 붙는다
+      (t.by ? `<span class="tmine">직접 만든 문항</span>` : "") +
       (t.id in done ? `<span class="tscore">${done[t.id]}점</span>` : "");
     b.onclick = () => start(t.id);
     $("topic-grid").appendChild(b);
@@ -221,6 +223,21 @@ function renderResult() {
       <details><summary>근거 보기</summary><p class="basis">${q.basis}</p></details>`;
     box.appendChild(el);
   });
+
+  // ★ 만든 사람과 «세기 전에 걸러낸 것». 배지만으로는 만든 일이 안 보인다 —
+  //   무엇을 걸러냈는지가 만든 일의 내용이다. 골격 주제에는 by 가 없어서
+  //   이 자리는 그냥 비어 있다(빈 상자를 억지로 채우지 않는다).
+  const made = $("made");
+  made.hidden = !PACK.by;
+  if (PACK.by) {
+    made.innerHTML =
+      `<p class="made-head">이 주제의 문항은 <b>${PACK.by}</b> 가 ` +
+      `${PACK.source} 원본에서 직접 계산해 만들었습니다</p>` +
+      (PACK.notes && PACK.notes.length
+        ? `<p class="made-sub">세기 전에 걸러낸 것</p><ul>` +
+          PACK.notes.map((n) => `<li>${n}</li>`).join("") + `</ul>`
+        : "");
+  }
 
   $("caveat").hidden = !PACK.caveat;
   if (PACK.caveat) $("caveat").innerHTML = `<b>이 데이터의 한계</b><br>${PACK.caveat}`;

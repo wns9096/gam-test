@@ -82,6 +82,25 @@ def main() -> int:
     ok(len(d.get("caveat", "")) > 80, "「이 데이터의 한계」를 채웠다",
        f"{len(d.get('caveat', ''))}자")
 
+    # ★ 「내가 만든 주제」 표시가 조용히 사라지지 않게 한다. build_topics.py 를
+    #   다시 돌리다 by/notes 를 빠뜨리면 배지도 「만든 과정」도 함께 사라지는데,
+    #   화면은 멀쩡해 보인다. 없어진 것은 눈에 띄지 않는다.
+    ok(d.get("by") == "wns9096", "내 주제에 만든 사람이 적혀 있다",
+       f"by={d.get('by')!r}")
+    ok(len(d.get("notes", [])) >= 3, "「세기 전에 걸러낸 것」이 세 줄 이상",
+       f"{len(d.get('notes', []))}줄")
+    # all() 은 빈 목록에 참이다 — notes 가 비면 이 검사가 헛돈다. 앞 검사가
+    # 막아 주지만, 헛도는 검사를 남겨 두지 않는다.
+    _n = d.get("notes", [])
+    ok(bool(_n) and all("<b>" in x or len(x) > 40 for x in _n),
+       "걸러낸 것이 한 줄 요약이 아니라 내용이 있다",
+       f"가장 짧은 줄 {min((len(x) for x in _n), default=0)}자")
+    내것 = [t for t in json.loads(
+        (ROOT / "topics.json").read_text(encoding="utf-8"))["topics"]
+        if t["id"] == MINE]
+    ok(내것 and 내것[0].get("by"), "목록에도 by 가 실려 있다",
+       "카드 배지는 목록의 by 를 본다")
+
     print("\n── 앱 ──")
     idx = json.loads((ROOT / "topics.json").read_text(encoding="utf-8"))["topics"]
     ok(len(idx) == 10, "주제가 열 개 그대로다", f"{len(idx)}개")

@@ -65,14 +65,20 @@ def owid_countries(rows, year, col):
             and not r["code"].startswith("OWID")}
 
 
-def topic(tid, emoji, title, blurb, source, source_url, questions, caveat=""):
+def topic(tid, emoji, title, blurb, source, source_url, questions, caveat="",
+          by="", notes=()):
     """caveat = 이 데이터를 믿을 때의 한계. 앱 화면에도 그대로 나간다.
 
     출처가 다르면 같은 '서울 기온'도 값이 다르다. 그 사실을 감추지 않는다.
+
+    by    = 이 주제의 문항을 만든 사람. 골격이 준 주제는 비어 있다.
+    notes = 세기 전에 원본을 열어 **걸러낸 것**. 이게 만든 일의 내용이다 —
+            「내가 만들었다」는 배지보다 이 목록이 그것을 보여 준다.
     """
     TOPICS.append({"id": tid, "emoji": emoji, "title": title, "blurb": blurb,
                    "source": source, "source_url": source_url,
-                   "caveat": caveat, "questions": questions})
+                   "caveat": caveat, "by": by, "notes": list(notes),
+                   "questions": questions})
 
 
 def slider(qid, text, answer, unit, lo, hi, step, basis, why):
@@ -584,6 +590,11 @@ topic(
 #      네모에 이름을 붙이면 그 이름대로 센 줄로 안다.
 #   ③ 규모 척도가 섞여 있다 (mww · mwc · mb · ml …). 같은 「규모」가
 #      한 자로 잰 값이 아니다. 한계에 적었다.
+# 지진이 아닌 것의 type 을 한글로. 화면에는 한글, 괄호에 원래 값을 같이
+# 보인다 — 원본에 뭐라고 적혀 있는지를 감추지 않는다.
+_QTYPE_KO = {"nuclear explosion": "핵실험", "volcanic eruption": "화산 분화",
+             "explosion": "폭발", "quarry blast": "발파"}
+
 QF = load_json("quakes.geojson")["features"]
 QKF = load_json("quakes_korea.geojson")["features"]
 
@@ -689,6 +700,29 @@ topic(
         f"아래는 처음부터 없고, 한반도 상자는 규모 3.0 이상인데도 {NY}년간 "
         f"{len(QKOR)}건뿐입니다 — 기상청이 기록한 국내 지진은 이보다 훨씬 "
         "많습니다. 전 세계를 고르게 관측하는 목록이 아닙니다."),
+    by="wns9096",
+    notes=[
+        # ★ 이 목록이 「내가 만들었다」의 내용이다. 골격에 있던 지진 주제를
+        #   지우고 원본부터 다시 열었을 때 **세기 전에** 걸린 것들이다.
+        #   값은 한 줄도 손으로 적지 않는다 — 위에서 계산한 것을 끌어온다.
+        f"「지진 목록」에 지진이 아닌 것이 {len(NOTQ)}건 섞여 있었습니다 — "
+        + " · ".join(_QTYPE_KO.get(x["type"], x["type"]) + f"({x['type']})"
+                       for x in sorted(NOTQ, key=lambda z: z["time"]))
+        + ". type 을 안 거르면 핵실험 한 건이 지진 통계에 들어갑니다.",
+
+        f"「한반도 주변」이라고 위·경도 네모를 그렸더니 그 안 지진 "
+        f"{len(QKOR)}건 가운데 {KOR_BOX['Japan']}건({JP_SHARE:.1f}%)이 일본 "
+        f"것이었습니다. 상자에 규슈 북부와 쓰시마가 들어 있습니다. "
+        f"네모에 이름을 붙이면 그 이름대로 센 줄로 압니다.",
+
+        # 규모 척도가 섞여 있는 것도 여기 적었다가 뺐다 — 바로 아래
+        # 「이 데이터의 한계」와 같은 말이 두 번 나온다. 그리고 그것은
+        # «걸러낸 것»이 아니라 «못 고치는 한계»라서 자리가 거기다.
+
+        f"답은 tools/검산.py 로 <b>다른 길로 다시 세어</b> 대조했습니다 — "
+        f"연평균은 전체÷{NY} 대신 연도별로 세어 합치고, 규모 7 이상은 "
+        f"7 미만과의 합이 전체인지로 확인했습니다.",
+    ],
 )
 
 
@@ -758,12 +792,14 @@ def main() -> None:
     for t in TOPICS:
         assert len(t["questions"]) == 5, f"{t['id']}: 문항이 5개가 아닙니다"
         pack = {k: t[k] for k in ("id", "emoji", "title", "blurb",
-                                  "source", "source_url", "caveat")}
+                                  "source", "source_url", "caveat",
+                                  "by", "notes")}
         pack["questions"] = t["questions"]
         io.open(OUT / f"{t['id']}.json", "w", encoding="utf-8").write(
             json.dumps(pack, ensure_ascii=False, indent=2))
+        # by 는 목록에도 보낸다 — 카드에 배지를 달려면 여기 있어야 한다
         index.append({k: t[k] for k in ("id", "emoji", "title", "blurb",
-                                        "source")})
+                                        "source", "by")})
 
     io.open(APP / "topics.json", "w", encoding="utf-8").write(json.dumps({
         "title": "감 테스트",

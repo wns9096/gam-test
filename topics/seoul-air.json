@@ -6,6 +6,8 @@
   "source": "Open-Meteo Air Quality (CAMS)",
   "source_url": "https://open-meteo.com/",
   "caveat": "CAMS 대기질 모델의 추정값입니다. 에어코리아 측정소 실측값과 다를 수 있습니다 — <b>잰 값이 아니라 계산한 값</b>이라, 특정 날짜의 수치를 실측치인 양 인용하면 안 됩니다.<br>2023~2024년 두 해뿐입니다. 「좋아지고 있다 · 나빠지고 있다」 같은 추세는 두 해로는 말할 수 없습니다.",
+  "by": "",
+  "notes": [],
   "questions": [
     {
       "id": "a1",
