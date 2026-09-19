@@ -16,6 +16,7 @@
 
 외부 라이브러리를 쓰지 않는다 (requirements.txt 가 필요 없다).
 """
+import hashlib
 import json
 import os
 import sys
@@ -74,7 +75,9 @@ PROMPT = """너는 '감 테스트' 라는 퀴즈 앱의 촌평 담당이다.
 
 
 def _ask(score, grade, directions, topic=""):
-    key = os.environ.get("GEMINI_API_KEY")
+    key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    # ★ .strip() 이 있는 까닭. 대시보드 입력칸에 붙여넣으면 줄바꿈이나
+    #   공백이 끝에 붙는 일이 흔하다. 그러면 키는 «있는데» 400 이 난다.
     if not key:
         return None                      # 키가 없으면 조용히 건너뛴다
 
@@ -105,6 +108,35 @@ def _ask(score, grade, directions, topic=""):
             "nickname": str(got.get("nickname", ""))[:20]}
 
 
+def _fp(key):
+    """키의 **지문**. 앞 8자리 해시다.
+
+    ★ 왜 이것을 내보내나. 「키를 넣었는데 촌평이 안 뜬다」 를 밖에서
+      가릴 방법이 없었다. 길이나 앞글자를 내보내면 그건 키 조각이다.
+      해시는 되돌릴 수 없고, 그러면서 **내 손의 키와 같은 것인지**는
+      말해 준다. 로컬에서 같은 해시를 찍어 견주면 끝난다.
+    """
+    return hashlib.sha256(key.encode()).hexdigest()[:8] if key else None
+
+
+def _reason(e):
+    """왜 안 나왔는지를 **한 낱말로**. 키도 사용자 답도 안 담는다.
+
+    ★ 원래는 stderr 에만 적었다. 그런데 그것을 보려면 Vercel 대시보드에
+      들어가야 한다 — 즉 만든 사람만 볼 수 있고, 그 사람도 안 들어가면
+      모른다. 조용히 꺼지지 않게 하려고 로그를 달았는데, 로그는 여전히
+      «찾아가야 보이는 것»이었다. 그래서 응답에도 싣는다.
+      화면은 이 값을 안 쓴다 — 촌평 자리는 그냥 비어 있다.
+    """
+    if isinstance(e, urllib.error.HTTPError):
+        try:
+            d = json.loads(e.read().decode("utf-8", "replace"))
+            return f"HTTP{e.code}:{d.get('error', {}).get('status', '')}"[:40]
+        except Exception:
+            return f"HTTP{e.code}"
+    return type(e).__name__
+
+
 class handler(BaseHTTPRequestHandler):
     def _send(self, payload, code=200):
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -122,16 +154,27 @@ class handler(BaseHTTPRequestHandler):
                        str(req.get("grade", "")),
                        [str(x) for x in req.get("directions", [])][:10],
                        str(req.get("topic", ""))[:60])
-            self._send(got or {"comment": None})
+            self._send(got or {"comment": None, "reason": "NO_KEY"})
         except Exception as e:
             # ★ 앱은 멈추지 않는다. 다만 **조용히** 꺼지지도 않는다 —
             #   왜 안 떴는지를 Vercel Logs 에 한 줄 남긴다. 모델 이름이
             #   죽으면 화면은 멀쩡하고 촌평만 영영 안 뜨는데, 로그가
             #   없으면 그것을 알 길이 없다.
             #   키도 사용자 답도 안 적는다 — 모델 이름과 오류 종류만.
-            print(f"[comment] {MODEL} 실패: {type(e).__name__} "
-                  f"{str(e)[:120]}", file=sys.stderr)
-            self._send({"comment": None})
+            까닭 = _reason(e)
+            print(f"[comment] {MODEL} 실패: {까닭}", file=sys.stderr)
+            self._send({"comment": None, "reason": 까닭})
 
     def do_GET(self):
-        self._send({"ok": True, "key": bool(os.environ.get("GEMINI_API_KEY"))})
+        """앱은 안 쓴다. **사람이 배포를 확인하려고** 있는 자리다.
+
+        키가 들어갔는지, 들어간 키가 내 손의 키와 같은 것인지를
+        키를 보지 않고 확인한다.
+        """
+        raw = os.environ.get("GEMINI_API_KEY") or ""
+        key = raw.strip()
+        self._send({"ok": True,
+                    "key": bool(key),
+                    "fp": _fp(key),          # 지문. 키는 되돌릴 수 없다
+                    "ws": raw != key,        # 붙여넣다 공백이 딸려왔나
+                    "model": MODEL})
