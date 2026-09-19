@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import csv
+import sys
 import io
 import json
 import datetime as dt
@@ -22,6 +23,15 @@ from statistics import mean
 
 HERE = Path(__file__).resolve().parent          # tools/
 APP = HERE.parent                                # 저장소 최상위 = 배포되는 곳
+# ★ 윈도우 기본 콘솔은 cp949 다. 마지막에 이모지를 찍다가 UnicodeEncodeError 로
+#   죽었다 — topics/*.json 은 이미 다 써 놓은 뒤였다. 계산은 멀쩡한데 「실패」로
+#   보인다. 스크립트는 **한 일** 때문에 죽어야지 **찍은 것** 때문에 죽으면 안 된다.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass
+
 RAW = APP / "data" / "raw"
 OUT = APP / "topics"
 
@@ -515,60 +525,124 @@ topic(
     caveat="ERA5 재분석 값이고, 도시별로 관측소 위치와 기준이 다릅니다.")
 
 # ── 9. 지진 ──────────────────────────────────────────────────────
-Q = [f["properties"] for f in load_json("quakes.geojson")["features"]]
-QK = [f["properties"] for f in load_json("quakes_korea.geojson")["features"]]
-n_years = 25
-per_year = len(Q) / n_years
-m7 = sum(1 for p in Q if p["mag"] >= 7.0) / n_years
-biggest = max(Q, key=lambda p: p["mag"])
+# ★ 여기는 내가 맡은 주제다. 골격에 있던 것을 지우고 원본부터 다시 열어
+#   계산했다. 값은 한 줄도 손으로 옮겨 적지 않는다 — 아래 식이 답이다.
+#
+# 원본을 열자마자 걸린 것 셋. 세기 전에 이것부터 봐야 했다.
+#   ① 「지진 목록」에 지진이 아닌 것이 둘 있다 — 화산 분화 1, 핵실험 1.
+#      type 을 안 거르면 2017년 북한 핵실험이 지진 통계에 들어간다.
+#   ② 「한반도 주변」 상자(북위 33~39.5 · 동경 124~132)에 규슈와 쓰시마가
+#      들어 있다. 상자 안 지진의 4분의 3이 일본 것이다.
+#      네모에 이름을 붙이면 그 이름대로 센 줄로 안다.
+#   ③ 규모 척도가 섞여 있다 (mww · mwc · mb · ml …). 같은 「규모」가
+#      한 자로 잰 값이 아니다. 한계에 적었다.
+QF = load_json("quakes.geojson")["features"]
+QKF = load_json("quakes_korea.geojson")["features"]
 
 
-def region(place):
-    return (place or "").split(",")[-1].strip()
+def _q(features):
+    """properties 에 깊이를 붙여 평평하게 편다. 지진만 남기는 건 아래에서."""
+    return [f["properties"] | {"depth": f["geometry"]["coordinates"][2]}
+            for f in features]
 
 
-top_region = Counter(region(p["place"]) for p in Q).most_common(1)[0]
-region_ko = {"Japan": "일본", "Indonesia": "인도네시아", "Chile": "칠레",
-             "Philippines": "필리핀"}
-kr_band = ("50건 미만" if len(QK) < 50 else "50~150건" if len(QK) <= 150
-           else "150~400건" if len(QK) <= 400 else "400건 이상")
+QALL, QKALL = _q(QF), _q(QKF)
+# ★ 여기가 이 주제의 첫 판단이다. **지진만 센다.**
+QUAKE = [x for x in QALL if x["type"] == "earthquake"]
+QKOR = [x for x in QKALL if x["type"] == "earthquake"]
+NOTQ = [x for x in QALL if x["type"] != "earthquake"]
+
+
+def q_year(x):
+    return dt.datetime.fromtimestamp(x["time"] / 1000, dt.timezone.utc).year
+
+
+Q_YEARS = sorted({q_year(x) for x in QUAKE})
+NY = len(Q_YEARS)                       # 25년. 코드로 세고 손으로 안 적는다
+assert NY == 2024 - 2000 + 1, f"연도가 {NY}개다 — 기간을 다시 본다"
+
+PER_YEAR = len(QUAKE) / NY              # 규모 5.5 이상, 연평균
+BIG = [x for x in QUAKE if x["mag"] >= 7.0]
+BIG_PER_YEAR = len(BIG) / NY
+
+# 규모가 1 오르면 얼마나 드물어지는가 — 두 구간의 건수로 직접 잰다
+BAND_LO = [x for x in QUAKE if 5.5 <= x["mag"] < 6.5]
+BAND_HI = [x for x in QUAKE if 6.5 <= x["mag"] < 7.5]
+BAND_RATIO = len(BAND_LO) / len(BAND_HI)
+
+
+def q_country(place):
+    """USGS 의 place 는 「… , 나라」 꼴이다. 쉼표 뒤가 나라 이름이다."""
+    return place.split(",")[-1].strip() if "," in place else place.strip()
+
+
+KOR_BOX = Counter(q_country(x["place"]) for x in QKOR)
+JP_SHARE = KOR_BOX["Japan"] / len(QKOR) * 100
 
 topic(
     "quakes", "🌎", "지진은 얼마나 자주",
-    "2000~2024년 전 세계 지진 기록",
+    "규모 5.5 이상 지진 25년치를 세어 봅니다",
     "USGS 지진 카탈로그", "https://earthquake.usgs.gov/",
     [
-        slider("q1", "규모 5.5 이상 지진은 전 세계에서 1년에 몇 번쯤 일어날까요?",
-               per_year, "회", 50, 1200, 50,
-               f"2000~2024년 {len(Q):,}건 ÷ {n_years}년 = "
-               f"연평균 {per_year:.0f}회",
-               "뉴스에 나오는 지진만 세면 실제보다 훨씬 적게 잡게 됩니다."),
-        slider("q2", "규모 7.0 이상은 1년에 몇 번쯤일까요?",
-               m7, "회", 0, 40, 1,
-               f"2000~2024년 규모 7.0 이상 "
-               f"{sum(1 for p in Q if p['mag'] >= 7.0)}건, 연평균 {m7:.1f}회",
-               "규모는 로그 척도입니다. 0.5만 올라가도 횟수가 크게 줄어듭니다."),
-        choice("q3", "규모 5.5 이상 지진이 가장 자주 기록된 나라는?",
-               ["일본", "인도네시아", "칠레", "필리핀"],
-               region_ko.get(top_region[0], "인도네시아"),
-               f"1위 {top_region[0]} {top_region[1]:,}건",
-               "지진 하면 떠오르는 나라와 실제로 가장 많이 기록되는 곳은 "
-               "다를 수 있습니다."),
-        slider("q4", "2000년 이후 기록된 가장 큰 지진의 규모는?",
-               biggest["mag"], "", 7.0, 9.9, 0.1,
-               f"규모 {biggest['mag']} · "
-               f"{dt.datetime.fromtimestamp(biggest['time'] / 1000, dt.UTC):%Y-%m-%d} "
-               f"{biggest['place']}",
-               "규모 9는 8보다 약 32배 큰 에너지입니다."),
-        choice("q5", "한반도 주변(위도 33~39.5도)에서 25년간 기록된 규모 3.0 이상 지진은?",
-               ["50건 미만", "50~150건", "150~400건", "400건 이상"], kr_band,
-               f"USGS 기준 {len(QK)}건. 이 관측망은 작은 지진을 모두 잡지는 "
-               f"못하므로 기상청 집계와 다릅니다",
-               "'어느 기관이 센 숫자인가'를 확인하지 않으면 같은 현상도 다른 "
-               "값이 됩니다."),
+        slider("z1", "전 세계에서 규모 5.5 이상 지진은 한 해에 몇 번쯤 일어날까요?",
+               PER_YEAR, "건", 0, 800, 20,
+               f"{Q_YEARS[0]}~{Q_YEARS[-1]}년 {NY}년간 {len(QUAKE):,}건 ÷ {NY}년 "
+               f"= 연 {PER_YEAR:.1f}건. 목록에 섞여 있던 지진 아닌 "
+               f"{len(NOTQ)}건은 빼고 세었습니다",
+               "뉴스에 나온 지진만 기억에 남습니다. 규모 5.5면 큰 지진인데, "
+               "사람이 안 사는 바다에서 나면 아무도 모릅니다."),
+
+        slider("z2", "그중 규모 7.0 이상은 한 해에 몇 번일까요?",
+               BIG_PER_YEAR, "건", 0, 60, 2,
+               f"{NY}년간 {len(BIG):,}건 ÷ {NY}년 = 연 {BIG_PER_YEAR:.1f}건 "
+               f"(분모는 위와 같은 {len(QUAKE):,}건)",
+               "한 해에 한두 번으로 느끼지만 한 달에 한 번꼴입니다. "
+               "규모 7이 다 재난이 되는 것은 아니라서 이름이 안 남습니다."),
+
+        choice("z3", "규모 5.5~6.5 지진은 6.5~7.5 지진보다 몇 배 많을까요?",
+               ["2배쯤", "5배쯤", "10배쯤", "50배쯤"], "10배쯤",
+               f"{len(BAND_LO):,}건 / {len(BAND_HI):,}건 = {BAND_RATIO:.1f}배",
+               "규모는 더하기가 아니라 곱하기로 움직입니다. "
+               "1이 오르면 건수는 열 배쯤 줄어듭니다."),
+
+        choice("z4", "「한반도 주변」이라고 위·경도 네모를 그려 지진을 세면, "
+                     "그 안의 지진 중 일본에서 난 것은 몇 %일까요?",
+               ["10%쯤", "30%쯤", "50%쯤", "70%가 넘는다"], "70%가 넘는다",
+               f"북위 33~39.5 · 동경 124~132 상자 안 {len(QKOR)}건 중 일본 "
+               f"{KOR_BOX['Japan']}건 = {JP_SHARE:.1f}% "
+               f"(남한 {KOR_BOX['South Korea']} · 북한 {KOR_BOX['North Korea']} "
+               f"· 중국 {KOR_BOX['China']})",
+               "네모에 이름을 붙이면 그 이름대로 센 줄로 압니다. "
+               "이 상자 안에는 규슈 북부와 쓰시마가 들어 있습니다."),
+
+        choice("z5", f"이 목록(규모 5.5 이상, {Q_YEARS[0]}~{Q_YEARS[-1]}년, "
+                     f"{len(QALL):,}건)에는 지진이 아닌 것이 둘 섞여 있습니다. "
+                     f"무엇일까요?",
+               ["화산 분화와 핵실험", "운석 충돌과 산사태",
+                "댐 붕괴와 광산 폭발", "없다 — 전부 지진이다"],
+               "화산 분화와 핵실험",
+               " · ".join(
+                   f"{dt.datetime.fromtimestamp(x['time']/1000, dt.timezone.utc):%Y-%m-%d} "
+                   f"{x['type']} M{x['mag']}"
+                   for x in sorted(NOTQ, key=lambda z: z["time"]))
+               + f" — type 이 earthquake 가 아닌 {len(NOTQ)}건",
+               "「지진 목록」이라는 이름을 믿고 세면 핵실험 한 건이 지진 "
+               "통계에 들어갑니다. 세기 전에 무엇이 들어 있는지 봅니다."),
     ],
-    caveat="USGS 카탈로그는 작은 지진을 모두 담지 못합니다. 한반도 지진은 "
-           "기상청 집계가 더 많습니다.")
+    caveat=(
+        "USGS 값이라 기상청 기록과 다릅니다. 같은 지진인데 규모가 달라 "
+        "<b>순서까지 바뀝니다</b> — 이 데이터에서는 2017년 포항 5.5 가 "
+        "2016년 경주 5.4 보다 크지만, 기상청 발표는 경주 5.8 · 포항 5.4 라 "
+        "반대입니다. 「가장 큰 지진」은 어느 기관 값이냐를 붙이지 않으면 "
+        "답할 수 없는 질문입니다.<br>"
+        "규모 척도도 한 가지가 아닙니다(mww · mwc · mb · ml 등이 섞여 "
+        "있습니다).<br>"
+        "작은 지진일수록 빠집니다. 세계 집계는 규모 5.5 이상만 받아서 그 "
+        f"아래는 처음부터 없고, 한반도 상자는 규모 3.0 이상인데도 {NY}년간 "
+        f"{len(QKOR)}건뿐입니다 — 기상청이 기록한 국내 지진은 이보다 훨씬 "
+        "많습니다. 전 세계를 고르게 관측하는 목록이 아닙니다."),
+)
+
 
 # ── 10. 수명 ─────────────────────────────────────────────────────
 le = [r for r in load_csv("life_expectancy.csv") if r["life_expectancy_0"]]

@@ -19,6 +19,16 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# ★ 윈도우 기본 콘솔은 cp949 다. 아래 설명 문구에 「—」 가 들어 있어서,
+#   여덟 번째 파일까지 받은 뒤 **찍다가** UnicodeEncodeError 로 죽었다.
+#   받는 일은 멀쩡했는데 결과를 찍지 못해 지진 파일 둘을 못 받았다.
+#   스크립트는 **한 일** 때문에 죽어야 하고 **찍은 것** 때문에 죽으면 안 된다.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass
+
 RAW = Path(__file__).resolve().parent.parent / "data" / "raw"
 # HTTP 헤더는 latin-1 만 담는다. 한글을 넣으면 UnicodeEncodeError 가 난다
 UA = {"User-Agent": "gam-test-class/1.0 (data analysis class)"}
