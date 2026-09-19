@@ -95,6 +95,21 @@ def main() -> int:
         pg.keyboard.press("ArrowRight")
         ok(not pg.is_disabled("#btn-next"), "한 번 움직이면 «다음»이 열린다")
 
+
+        print("── 손가락이 닿는 크기인가 ──")
+        # ★ 눈으로 봐서는 안 걸린다. 슬라이더의 동그란 손잡이는 34px 라 커
+        #   보이는데, 요소 자체의 높이는 트랙과 같은 8px 였다 — 닿는 자리는
+        #   줄 하나다. 애플·구글이 권하는 최소는 44px 다.
+        for sel, 이름 in (("#btn-next", "«다음» 버튼"), ("#slider", "슬라이더"),
+                          ("#btn-back", "«주제 고르기»")):
+            bb = pg.locator(sel).bounding_box()
+            크기 = str(round(bb["width"])) + "×" + str(round(bb["height"])) + "px"
+            ok(bb["height"] >= 44, 이름 + " 가 44px 이상", 크기)
+        작 = [이름 for sel, 이름 in (("#q-text", "문항"), ("#btn-next", "버튼"))
+              if float(pg.eval_on_selector(
+                  sel, "e => getComputedStyle(e).fontSize").replace("px", "")) < 16]
+        ok(not 작, "본문 글자가 16px 이상", str(작) if 작 else "문항·버튼 둘 다")
+
         print("\n── 끝까지 풀린다 ──")
         for _ in range(5):
             if pg.is_hidden("#q-choice"):
